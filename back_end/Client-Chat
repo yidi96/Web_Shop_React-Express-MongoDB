@@ -1,0 +1,56 @@
+public class MyServer {
+
+    public static void main(String[] args) {
+        NioEventLoopGroup bossGroup = new NioEventLoopGroup();
+        NioEventLoopGroup workerGroup = new NioEventLoopGroup();
+        ServerBootstrap serverBootstrap = new ServerBootstrap();
+
+        try {
+            serverBootstrap.group(bossGroup,workerGroup);
+            serverBootstrap.option(ChannelOption.SO_BACKLOG,128);
+            serverBootstrap.childOption(ChannelOption.SO_KEEPALIVE,true);
+            serverBootstrap.channel(NioServerSocketChannel.class);//增加NIoServerSocketChannel的
+            serverBootstrap.handler(new LoggingHandler(LogLevel.INFO));//增加日志的handler
+            serverBootstrap.childHandler(new ChannelInitializer<SocketChannel>() {
+                @Override
+                protected void initChannel(SocketChannel ch) throws Exception {
+
+                    ChannelPipeline pipeline = ch.pipeline();
+                    pipeline.addLast(new HttpServerCodec());  //
+                    pipeline.addLast(new ChunkedWriteHandler());
+
+                    /*
+                    * http的数据在传输过程中分段，httpObjectAggregator就是可以将多个段聚合
+                    * /**
+                     * Creates a new instance.
+                     * @param maxContentLength the maximum length of the aggregated content in bytes.
+                     * If the length of the aggregated content exceeds this value,
+                     * {@link #handleOversizedMessage(ChannelHandlerContext, HttpMessage)} will be called.
+                     *参数maxContentLength表示聚合内容的最大长度（字节）。
+                     */
+
+                    pipeline.addLast(new HttpObjectAggregator(9090));
+
+               
+                    pipeline.addLast(new WebSocketServerProtocolHandler("/netty"));
+                    pipeline.addLast(new MyTextSocketFrameHandler());
+
+                }
+            });
+
+            ChannelFuture sync = serverBootstrap.bind(8088).sync();
+            sync.channel().closeFuture().sync();
+
+        } catch (InterruptedException e) {
+            System.out.println(e.getMessage());
+        } finally {
+            bossGroup.shutdownGracefully();
+            workerGroup.shutdownGracefully();
+        }
+
+
+
+    }
+
+
+}
